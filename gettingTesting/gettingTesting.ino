@@ -34,6 +34,11 @@ const int HX711_sck = 27; //mcu > HX711 sck pin
 HX711_ADC LoadCell(HX711_dout, HX711_sck);
 unsigned long t = 0;
 
+// For READING DELAY OF ESP32 TO FIRESTORE
+unsigned long lastCheckTime = 0;
+const unsigned long checkInterval = 60000; // Check every 60 second
+bool statusChecked = false;
+
 void tokenStatusCallback(bool status) {
   Serial.printf("Token status changed: %s\n", status ? "true" : "false");
 }
@@ -68,8 +73,14 @@ void setup() {
 bool codeExecuted = false; // Flag to indicate whether the code has been executed
 
 void loop() {
-  
+
+  unsigned long currentMillis = millis();
+
+  if (currentMillis - lastCheckTime >= checkInterval || !statusChecked) {
+    lastCheckTime = currentMillis;
+    statusChecked = true;
     checkAndUpdateStatus();
+  }
 
 }
 
