@@ -7,6 +7,9 @@
 #include <Firebase_ESP_Client.h>
 #include <addons/TokenHelper.h>
 #include <ArduinoJson.h>
+#include <FirebaseESP32.h>
+#include <FirebaseClient.h>
+
 
 #include <Arduino.h>
 #include "soc/rtc.h"
@@ -37,7 +40,7 @@ unsigned long t = 0;
 // For READING DELAY OF ESP32 TO FIRESTORE
 unsigned long lastCheckTime = 0;
 const unsigned long checkInterval = 5000; // Check every 5 seconds
-// bool statusChecked = false;
+bool statusChecked = false;
 
 void tokenStatusCallback(bool status) {
   Serial.printf("Token status changed: %s\n", status ? "true" : "false");
@@ -74,54 +77,59 @@ bool codeExecuted = false; // Flag to indicate whether the code has been execute
 
 void loop() {
 
-  unsigned long currentMillis = millis();
-
-      // Check if it's time to perform the status check
-    if (currentMillis - lastCheckTime >= checkInterval) { // It can be this "(currentMillis - lastCheckTime >= checkInterval || !statusChecked)"
-        lastCheckTime = currentMillis; // Update last check time
-        checkAndUpdateStatus(); // Perform the status check
-        Serial.println("FIRESTORE READ HAPPENED");
+ // Check Realtime Database for changes
+  if (Firebase.getBool(firebaseData, "/trigger/status")) {
+    if (firebaseData.dataType() == "boolean") {
+      bool statusValue = firebaseData.boolData();
+      if (statusValue) {
+        Serial.println("Status is ON");
+        getPetsWeight();
+        Serial.println("READ FROM REALTIME DATABASE");
+        // Optionally, reset the status in the database after executing the code
+        Firebase.setBool(firebaseData, "/trigger/status", false);
+      }
     }
-  
-  delay(1000);
+  }
+  delay(1000); // Delay to avoid overwhelming the Firebase server with requests
+
 }
 
-void checkAndUpdateStatus() {
-    String path = "trigger";
+// void checkAndUpdateStatus() {
+//     String path = "trigger";
 
-    if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), "")) {
-        JsonDocument doc;
-        DeserializationError error = deserializeJson(doc, fbdo.payload().c_str());
+//     if (Firebase.Firestore.getDocument(&fbdo, FIREBASE_PROJECT_ID, "", path.c_str(), "")) {
+//         JsonDocument doc;
+//         DeserializationError error = deserializeJson(doc, fbdo.payload().c_str());
 
-        if (!error) {
-            bool statusChanged = false; // Flag to indicate if status changed to true
+//         if (!error) {
+//             bool statusChanged = false; // Flag to indicate if status changed to true
 
-            for (JsonObject document : doc["documents"].as<JsonArray>()) {
-                const char *document_name = document["name"];
-                const bool statusValue = document["fields"]["status"]["booleanValue"];
+//             for (JsonObject document : doc["documents"].as<JsonArray>()) {
+//                 const char *document_name = document["name"];
+//                 const bool statusValue = document["fields"]["status"]["booleanValue"];
 
-                if (strstr(document_name, "getPetWeight") != nullptr && statusValue) {
-                    if (statusValue && !codeExecuted) {
-                        Serial.println("Status is ON");
-                        getPetsWeight();
-                        return;
-                        // codeExecuted = true; // Set the flag to indicate that the code has been executed
-                        // statusChanged = true; // Status changed to true
-                    }
-                }
-            }
+//                 if (strstr(document_name, "getPetWeight") != nullptr && statusValue) {
+//                     if (statusValue && !codeExecuted) {
+//                         Serial.println("Status is ON");
+//                         getPetsWeight();
+//                         return;
+//                         // codeExecuted = true; // Set the flag to indicate that the code has been executed
+//                         // statusChanged = true; // Status changed to true
+//                     }
+//                 }
+//             }
 
-            // if (!statusChanged && codeExecuted) {
-            //     // If status didn't change to true but code was executed, reset codeExecuted flag
-            //     codeExecuted = false;
-            // }
+//             // if (!statusChanged && codeExecuted) {
+//             //     // If status didn't change to true but code was executed, reset codeExecuted flag
+//             //     codeExecuted = false;
+//             // }
 
-        } else {
-            Serial.print("deserializeJson() failed: ");
-            Serial.println(error.c_str());
-        }
-    }
-}
+//         } else {
+//             Serial.print("deserializeJson() failed: ");
+//             Serial.println(error.c_str());
+//         }
+//     }
+// }
 
 void getPetsWeight () {
 
@@ -213,15 +221,15 @@ void getPetsWeight () {
                 Serial.print("failed, reason: "); Serial.println(fbdo.errorReason());
               }
 
-              // UPDATING STATUS TO FALSE THAT ACT AS A TOGGLE OFF
-              String getPetWeightTrigger = "trigger/getPetWeight";
-              content.set("fields/status/booleanValue", boolean(false));
-              Serial.print("Updating getPetWeight Trigger Status Data...");
-              if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", getPetWeightTrigger.c_str(), content.raw(), "status")) { 
-                Serial.println("ok");   
-              } else  { 
-                Serial.print("failed, reason: "); Serial.println(fbdo.errorReason());
-              }
+              // // UPDATING STATUS TO FALSE THAT ACT AS A TOGGLE OFF
+              // String getPetWeightTrigger = "trigger/getPetWeight";
+              // content.set("fields/status/booleanValue", boolean(false));
+              // Serial.print("Updating getPetWeight Trigger Status Data...");
+              // if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", getPetWeightTrigger.c_str(), content.raw(), "status")) { 
+              //   Serial.println("ok");   
+              // } else  { 
+              //   Serial.print("failed, reason: "); Serial.println(fbdo.errorReason());
+              // }
               
         totalWeight = 0;
         sampleCount = 0;
