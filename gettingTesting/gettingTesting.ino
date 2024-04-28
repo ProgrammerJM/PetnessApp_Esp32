@@ -4,6 +4,7 @@
 #include <ESP8266WIFI.h>
 #endif
 
+// LIBRARY TO USE
 #include <Firebase_ESP_Client.h>
 #include <addons/TokenHelper.h>
 #include <ArduinoJson.h>
@@ -13,8 +14,8 @@
 #include <HX711_ADC.h>
 
   // WIFI Credentials
-  #define WIFI_SSID "virusX"
-  #define WIFI_PASSWORD "simacmacmagbabayad"
+  #define WIFI_SSID "WIFIWIFIWIFI"
+  #define WIFI_PASSWORD "LorJun21"
 
   // DEFINE FIREBASE API KEY, PROJECT ID
   #define API_KEY "AIzaSyDPcMRU9x421wP0cS1sRHwEvi57W8NoLiE"
@@ -36,7 +37,7 @@ unsigned long t = 0;
 
 // For READING DELAY OF ESP32 TO FIRESTORE
 unsigned long lastCheckTime = 0;
-const unsigned long checkInterval = 5000; // Check every 5 seconds
+const unsigned long checkInterval = 3000; // Check every 5 seconds
 // bool statusChecked = false;
 
 void tokenStatusCallback(bool status) {
@@ -68,6 +69,9 @@ void setup() {
 
       Firebase.begin(&config, &auth);
       Firebase.reconnectWiFi(true);
+
+      // INITIALIZE WEIGHT TO TARE BEFORE GETTING TRUE WEIGHT
+      getPetsWeightTare();
 }
 
 bool codeExecuted = false; // Flag to indicate whether the code has been executed
@@ -123,15 +127,14 @@ void checkAndUpdateStatus() {
     }
 }
 
-void getPetsWeight () {
-
-// Load Cell Calibration Value
+void getPetsWeightTare() {
+  // Load Cell Calibration Value
   Serial.println("Load Cell Starting...");
-  float calibrationValue = 22.17; 
+  float calibrationValue = 22.71; 
 
 // Load Cell TARE Precision
   LoadCell.begin();
-  unsigned long stabilizingtime = 2000; 
+  unsigned long stabilizingtime = 1000; 
   boolean _tare = true; 
   LoadCell.start(stabilizingtime, _tare);
   if (LoadCell.getTareTimeoutFlag()) {
@@ -147,11 +150,13 @@ void getPetsWeight () {
     } else if (LoadCell.getSPS() > 100) {  
       Serial.println("!!Sampling rate is higher than specification, check MCU>HX711 wiring and pin designations");
     }
+}
 
+void getPetsWeight () {
 
   FirebaseJson content;
-  const int numSamples = 10; // Total number of samples to collect
-  const int numIgnoreSamples = 5; // Number of initial samples to ignore
+  const int numSamples = 20; // Total number of samples to collect
+  const int numIgnoreSamples = 10; // Number of initial samples to ignore
   float totalWeight = 0; // Variable to store the total weight
   int sampleCount = 0; // Counter for the number of samples collected
 
@@ -169,7 +174,7 @@ void getPetsWeight () {
           Serial.println(weightSample);
         }
         
-        delay(500); 
+        delay(200); 
       }
       
       // Collect the next 5 samples
@@ -196,15 +201,15 @@ void getPetsWeight () {
       float petsWeight = totalWeight / sampleCount;
 
       // Convert weight to Kilograms
-      float petsWeightKg = petsWeight / 1000.0;
+      // float petsWeightKg = petsWeight / 1000.0;
       
       // Print the mean average
       Serial.print("PETS WEIGHT:  ");
-      Serial.println(petsWeightKg);
+      Serial.println(petsWeight);
 
                     // getting Weight Data and Sending to Firestore
               String documentPath = "getWeight/LoadCell";
-              content.set("fields/Weight/stringValue", String(petsWeightKg, 2));
+              content.set("fields/Weight/stringValue", String(petsWeight, 2));
               Serial.print("Updating Weight Data...");
               if (Firebase.Firestore.patchDocument(&fbdo, FIREBASE_PROJECT_ID, "", documentPath.c_str(), content.raw(), "Weight")) { 
                 Serial.println("ok");   
@@ -213,6 +218,7 @@ void getPetsWeight () {
                 Serial.print("failed, reason: "); Serial.println(fbdo.errorReason());
               }
 
+              delay(200);
               // UPDATING STATUS TO FALSE THAT ACT AS A TOGGLE OFF
               String getPetWeightTrigger = "trigger/getPetWeight";
               content.set("fields/status/booleanValue", boolean(false));
